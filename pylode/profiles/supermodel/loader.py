@@ -24,49 +24,47 @@ MEDIA_TYPES = {
 }
 
 
-def fetch(
-    url: str, client: httpx.Client, content_type: str = "text/turtle"
-) -> tuple[str, str]:
-    # TODO: Remove proxies
-    # http://localhost:8001/profiles/nz-profile.ttl
-    # http://localhost:8000/csdm.ttl
-    proxies = {
-        # "https://linked.data.gov.au/def/csdm/geometryprim": "http://localhost:8000/geometryprim.ttl",
-        # "http://www.opengis.net/ont/geosparql": "https://cdn.jsdelivr.net/gh/opengeospatial/ogc-geosparql@master/1.1/geo.ttl",
-        # "http://datashapes.org/dash": "https://cdn.jsdelivr.net/gh/zazuko/rdf-vocabularies@master/ontologies/dash/dash.nq",
-        # "https://linked.data.gov.au/def/csdm/container": "http://localhost:8000/container.ttl",
-        # "https://linked.data.gov.au/def/csdm/parcels": "http://localhost:8000/parcels.ttl",
-        # "https://linked.data.gov.au/def/csdm/commonpatterns": "http://localhost:8000/commonpatterns.ttl",
-        # "https://icsm-au.github.io/3d-csdm-profiles/profiles/icsm-common.ttl": "http://localhost:8001/profiles/icsm-common.ttl",
-        # "https://icsm-au.github.io/3d-csdm-profiles/profiles/icsm-profile-shacl.ttl": "http://localhost:8001/profiles/icsm-profile-shacl.ttl",
-        # "https://icsm-au.github.io/3d-csdm-profiles/profiles/nz-vocab-bindings.ttl": "http://localhost:8001/profiles/nz-vocab-bindings.ttl",
-        # "https://icsm-au.github.io/3d-csdm-profiles/profiles/nz-profile-shacl.ttl": "http://localhost:8001/profiles/nz-profile-shacl.ttl",
-        # "https://icsm-au.github.io/3d-csdm-profiles/profiles/nz-vocabs-shacl.ttl": "http://localhost:8001/profiles/nz-vocabs-shacl.ttl",
-        # "https://icsm-au.github.io/3d-csdm/csdm.ttl": "http://localhost:8000/csdm.ttl",
-        # "https://icsm-au.github.io/3d-csdm/pylode.ttl": "http://localhost:8000/pylode.ttl",
-        # "https://icsm-au.github.io/3d-csdm-profiles/profiles/jurisdictional-codelist-types.shacl": "http://localhost:8001/profiles/jurisdictional-codelist-types.shacl",
-        # "https://icsm-au.github.io/3d-csdm/shapes/survey_features.shapes.ttl": "http://localhost:8000/shapes/survey_features.shapes.ttl",
-        # "https://icsm-au.github.io/3d-csdm-profiles/profiles/wa-vocab-bindings.ttl": "http://localhost:8001/profiles/wa-vocab-bindings.ttl",
-        # "https://icsm-au.github.io/3d-csdm-profiles/profiles/icsm-vocab-bindings.ttl": "http://localhost:8001/profiles/icsm-vocab-bindings.ttl",
-        # "https://icsm-au.github.io/3d-csdm-profiles/profiles/wa-profile-shacl.ttl": "http://localhost:8001/profiles/wa-profile-shacl.ttl",
-        # "https://icsm-au.github.io/3d-csdm/commonpatterns.ttl": "http://localhost:8000/commonpatterns.ttl",
-        # "https://icsm-au.github.io/3d-csdm/shapes/common_patterns.shapes.ttl": "http://localhost:8000/shapes/common_patterns.shapes.ttl",
-        # "https://icsm-au.github.io/3d-csdm-profiles/profiles/nz-pointnames-shacl.ttl": "http://localhost:8001/profiles/nz-pointnames-shacl.ttl",
-        # "https://icsm-au.github.io/3d-csdm/shapes/container.shapes.ttl": "http://localhost:8000/shapes/container.shapes.ttl",
-    }
+def fetch(url: str, client: httpx.Client, content_type: str = "text/turtle") -> tuple[str, str]:
+    """
+    Fetches a resource. Supports:
+        - file:// URLs
+        - bare local paths
+        - http:// and https:// URLs
+    """
+
+    # 1. Local file: file://...
+    if url.startswith("file://"):
+        path = url[len("file://"):]
+        logger.debug(f"Loading local file from file:// URL: {path}")
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read(), content_type
+
+    # 2. Local file: raw path ("MDS_Onto_clean.ttl" or "/Users/.../foo.ttl")
+    if not url.startswith("http://") and not url.startswith("https://"):
+        logger.debug(f"Loading local file from local path: {url}")
+        with open(url, "r", encoding="utf-8") as f:
+            return f.read(), content_type
+
+    # 3. Remote HTTP(S)
+    proxies = {}  # keep your proxy code here if needed
+
     if url in proxies:
-        logger.debug(f"Using proxy URL {url} to {proxies[url]}")
+        logger.debug(f"Using proxy URL {url} → {proxies[url]}")
         url = proxies[url]
+
     response = client.get(url, headers={"Accept": content_type})
+
     if response.status_code != 200:
         raise httpx.HTTPError(
             f"HTTP {response.status_code}: Failed to fetch remote resource from {url}. {response.text}"
         )
 
-    content_type_headers = response.headers.get("Content-Type")
+    # Detect content type from headers
+    content_type_headers = response.headers.get("Content-Type", "")
     for media_type in MEDIA_TYPES:
         if media_type in content_type_headers:
             content_type = media_type
+
     return response.text, content_type
 
 

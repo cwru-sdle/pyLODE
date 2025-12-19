@@ -12,6 +12,7 @@ from dominate.tags import (
     body,
     div,
     h1,
+    h2,
     table,
     colgroup,
     col,
@@ -27,6 +28,7 @@ from dominate.tags import (
     thead,
     th,
     span,
+    img,
 )
 from dominate.util import raw
 from rdflib import Graph, OWL, SDO, DCTERMS, VANN, SKOS
@@ -60,6 +62,8 @@ from pylode.profiles.supermodel.component import (
     example,
 )
 from pylode.profiles.supermodel.fragment import make_html_fragment
+
+from dominate.tags import ol, ul, li, details, summary, span
 
 RDF_FOLDER = Path(__file__).parent / "rdf"
 
@@ -116,6 +120,198 @@ class Supermodel:
             )
         self.doc = dominate.document(title=title)
 
+# custom overview section
+    
+
+    def _make_overview_toc(self):
+        """
+        Add an Overview section containing:
+        - Overview text
+        - A hierarchy-styled Table of Contents with:
+            Overview
+            Description
+            Classes / Properties
+                Classes (modules + class hierarchy)
+                Object Properties
+                Data Properties
+                Annotation Properties
+                Named Individuals
+        """
+
+        component_models = self.query.component_models
+
+        # Aggregate non-class things for the other TOC entries
+        all_obj_props: list = []
+        all_data_props: list = []
+        all_anno_props: list = []
+        all_named_inds: list = []
+
+        for cm in component_models:
+            all_obj_props.extend(cm.object_properties)
+            all_data_props.extend(cm.datatype_properties)
+            all_anno_props.extend(cm.annotation_properties)
+            if hasattr(cm, "named_individuals"):
+                all_named_inds.extend(cm.named_individuals)
+
+        with self.content:
+            # ====== Overview section ======
+            with div(_class="sect1", id="collapse_toc"):
+                h2("Table of Contents", True)
+
+                # Overview text (+ optional diagram if you add it later)
+                with div(_class="overview-wrapper"):
+                    with div(_class="overview-text"):
+                        desc = None
+                        try:
+                            props = self.query.onts_props
+                            if "http://purl.org/dc/terms/description" in props:
+                                dl = props["http://purl.org/dc/terms/description"]
+                                if dl:
+                                    desc = str(dl[0])
+                        except Exception:
+                            pass
+
+                        if desc:
+                            p(desc)
+
+                # ====== Table of Contents (hierarchy-style) ======
+                with div(_class="overview-toc hierarchy"):
+                    #h3("Table of Contents", True)
+
+                    # Top-level hierarchy list
+                    with ul(_class="hierarchy-list"):
+                        # Overview (this section)
+                        with li():
+                            span(_class="hierarchy-node-leaf")
+                            a("Diagram", href="#examples")
+
+                        # Description (assumes a section with id="description" exists)
+                        with li():
+                            span(_class="hierarchy-node-leaf")
+                            a("Description", href="#description")
+
+                        # Classes / Properties section
+                        with li():
+                            # Has children, so use hierarchy-node
+                            span(_class="hierarchy-node")
+                            a(
+                                "Classes and Properties",
+                                href="#classes-and-properties",
+                            )
+
+                            # Nested list for the 3.x subsections
+                            with ul(_class="nested-hierarchy-list"):
+
+                                # ---- Classes: modules + class hierarchy ----
+                                with li():
+                                    span(_class="hierarchy-node")
+                                    a("Classes", href="#classes-and-properties")
+
+                                    # One more level for modules and their class trees
+                                    with ul(_class="nested-hierarchy-list"):
+                                        for cm in component_models:
+                                            if cm.classes:
+                                                with li():
+                                                    span(_class="hierarchy-node")
+                                                    cm_frag = make_html_fragment(cm.iri)
+                                                    a(cm.name, href=f"#{cm_frag}")
+                                                    if cm.top_level_classes:
+                                                        # Reuse recursive hierarchy builder
+                                                        self._make_class_hierarchy(
+                                                            cm.top_level_classes
+                                                        )
+
+                                # ---- Object Properties ----
+                                with li():
+                                    span(
+                                        _class="hierarchy-node"
+                                        if all_obj_props
+                                        else "hierarchy-node-leaf"
+                                    )
+                                    a("Object Properties", href="#object-properties")
+
+                                    if all_obj_props:
+                                        with ul(_class="nested-hierarchy-list"):
+                                            for prop in all_obj_props:
+                                                frag = make_html_fragment(prop.iri)
+                                                with li():
+                                                    span(_class="hierarchy-node-leaf")
+                                                    a(prop.name, href=f"#{frag}")
+
+                                # ---- Data Properties ----
+                                with li():
+                                    span(
+                                        _class="hierarchy-node"
+                                        if all_data_props
+                                        else "hierarchy-node-leaf"
+                                    )
+                                    a("Data Properties", href="#data-properties")
+
+                                    if all_data_props:
+                                        with ul(_class="nested-hierarchy-list"):
+                                            for prop in all_data_props:
+                                                frag = make_html_fragment(prop.iri)
+                                                with li():
+                                                    span(_class="hierarchy-node-leaf")
+                                                    a(prop.name, href=f"#{frag}")
+
+                                # ---- Annotation Properties ----
+                                with li():
+                                    span(
+                                        _class="hierarchy-node"
+                                        if all_anno_props
+                                        else "hierarchy-node-leaf"
+                                    )
+                                    a(
+                                        "Annotation Properties",
+                                        href="#annotation-properties",
+                                    )
+
+                                    if all_anno_props:
+                                        with ul(_class="nested-hierarchy-list"):
+                                            for prop in all_anno_props:
+                                                frag = make_html_fragment(prop.iri)
+                                                with li():
+                                                    span(_class="hierarchy-node-leaf")
+                                                    a(prop.name, href=f"#{frag}")
+
+                                # ---- Named Individuals ----
+                                with li():
+                                    span(
+                                        _class="hierarchy-node"
+                                        if all_named_inds
+                                        else "hierarchy-node-leaf"
+                                    )
+                                    a("Named Individuals", href="#named-individuals")
+
+                                    if all_named_inds:
+                                        with ul(_class="nested-hierarchy-list"):
+                                            for ind in all_named_inds:
+                                                frag = make_html_fragment(ind.iri)
+                                                with li():
+                                                    span(_class="hierarchy-node-leaf")
+                                                    a(ind.name, href=f"#{frag}")
+
+                    # Ensure hierarchy CSS/JS are available (moved from _make_class_hierarchy_top_level)
+                    style(
+                        raw(
+                            "\n"
+                            + open(
+                                Path(__file__).parent.parent.parent
+                                / "static/hierarchy.css"
+                            ).read()
+                            + "\n\t"
+                        )
+                    )
+                    script(
+                        raw(
+                            open(
+                                Path(__file__).parent.parent.parent
+                                / "static/hierarchy.js"
+                            ).read()
+                        ),
+                    )
+
     def make_html(self, destination: Path = None, include_css: bool = True):
         self._make_head(
             self.query.get_schema_org_metadata_graph(),
@@ -123,7 +319,7 @@ class Supermodel:
             destination=destination,
         )
         self._make_body()
-        self._make_toc()
+        #self._make_toc()
 
         if destination is not None:
             open(destination, "w").write(self.doc.render())
@@ -220,7 +416,7 @@ class Supermodel:
 
     def _make_body(self):
         with self.doc:
-            self.body = body(_class="book toc2 toc-left")
+            self.body = body(_class="book") # toc2 toc-left")
 
         self._make_header(self.query.onts_props[DCTERMS.title])
         self._make_content()
@@ -242,6 +438,7 @@ class Supermodel:
                 self.content = content
                 self._make_preamble()
                 self._make_examples()
+                self._make_overview_toc()
                 self._make_profiles_hierarchy_root()
                 self._make_vocabs_summary()
                 self._make_component_models()
@@ -565,7 +762,7 @@ class Supermodel:
 
         if component_model.annotation_properties:
             hr()
-            with div(_class="sect2"):
+            with div(_class="sect2", id="annotation-properties"):
                 h3(
                     "Annotation Properties",
                     identifier=f"{component_model.name} - Annotation Properties",
@@ -579,7 +776,7 @@ class Supermodel:
 
         if component_model.datatype_properties:
             hr()
-            with div(_class="sect2"):
+            with div(_class="sect2", id="data-properties"):
                 h3(
                     "Datatype Properties",
                     identifier=f"{component_model.name} - Datatype Properties",
@@ -593,7 +790,7 @@ class Supermodel:
 
         if component_model.object_properties:
             hr()
-            with div(_class="sect2"):
+            with div(_class="sect2", id="object-properties"):
                 h3(
                     "Object Properties",
                     identifier=f"{component_model.name} - Object Properties",
@@ -737,8 +934,8 @@ class Supermodel:
 
     def _make_component_models(self):
         with self.content:
-            with div(_class="sect1"):
-                self._make_class_hierarchy_top_level()
+            with div(_class="sect1", id="classes-and-properties"):
+                #self._make_class_hierarchy_top_level()
 
                 if len(self.query.component_models) == 1:
                     h2("Classes and Properties", True)
@@ -750,13 +947,13 @@ class Supermodel:
 
     def _make_examples(self):
         with self.content:
-            with div(_class="sect1"):
+            with div(_class="sect1", id='examples'):
                 for ex in self.query.examples:
                     example(ex, 2)
 
     def _make_preamble(self):
         with self.content:
-            with div(id="preamble"):
+            with div(id="description"):
                 with div(_class="sectionbody"):
                     with table(
                         _class="tableblock frame-none grid-none stripes-odd stretch"

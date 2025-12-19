@@ -77,20 +77,31 @@ def get_value(
 
 
 def get_examples(iri: URIRef, graph: Graph) -> list[MediaObject]:
-    example_iris = graph.objects(iri, SDO.workExample)
+    example_nodes = chain(graph.objects(iri, SDO.workExample),
+                          graph.objects(iri, SKOS.example))
     examples = []
-    for example_iri in example_iris:
-        class_types = list(graph.objects(example_iri, RDF.type))
-        if SDO.TextObject in class_types:
-            text_object = get_text_object(example_iri, graph)
-            examples.append(text_object)
-        elif SDO.ImageObject in class_types:
-            image_object = get_image_object(example_iri, graph)
-            examples.append(image_object)
-        else:
-            raise ValueError(
-                f"Examples must be either an sdo:TextObject or an sdo:ImageObject."
+    for node in example_nodes:
+        # If it’s a literal skos:example, wrap it as a text object
+        if isinstance(node, Literal):
+            examples.append(
+                TextObject(
+                    name=None,
+                    description=None,
+                    encoding_format="text/plain",
+                    source=None,
+                    order=None,
+                    text=dedent(str(node)).strip(),
+                )
             )
+            continue
+
+        class_types = list(graph.objects(node, RDF.type))
+        if SDO.TextObject in class_types:
+            examples.append(get_text_object(node, graph))
+        elif SDO.ImageObject in class_types:
+            examples.append(get_image_object(node, graph))
+        else:
+            raise ValueError("Examples must be either an sdo:TextObject or an sdo:ImageObject.")
 
     return sorted(examples, key=lambda x: x.order)
 

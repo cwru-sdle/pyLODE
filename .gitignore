@@ -119,3 +119,5 @@ output_files/
 pylode/_version.py
 
 .pickle
+
+*.pickle
